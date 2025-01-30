@@ -1,0 +1,7 @@
+{
+    "require": {
+        "sendinblue/api-v3-sdk": "^8.4",
+        "vlucas/phpdotenv": "^5.6",
+        "phpmailer/phpmailer": "^6.9"
+    }
+}

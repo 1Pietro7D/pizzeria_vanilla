@@ -1,0 +1,4 @@
+.env
+/uploads
+/vendor
+/fs_db_json/*.json
