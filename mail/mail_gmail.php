@@ -2,7 +2,7 @@
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
-require_once __DIR__ . '/../vendor/autoload.php'; // Assicuriamoci che PHPMailer sia installato via Composer
+require __DIR__ . '/../vendor/autoload.php'; // Assicuriamoci che PHPMailer sia installato via Composer
 
 use Dotenv\Dotenv;
 // Creiamo un'istanza di Dotenv puntando alla directory del progetto
@@ -16,7 +16,7 @@ $dotenv->load();
  * @param string $htmlBody  Corpo HTML dell'email
  * @return bool             true se invio OK, false se errore
  */
-function sendGmailEmail($htmlBody) {
+function sendOtpWithGmail($htmlBody) {
     $mail = new PHPMailer(true);
     try {
         // Configurazione del server SMTP di Google
