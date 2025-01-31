@@ -25,7 +25,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
 if (isset($_GET['verify']) && ($_SESSION['2fa_pending'] ?? false)) {
     ?>
     <h1>Verifica Codice OTP</h1>
-    <?php if ($error) echo '<p style="color:red;">' . htmlspecialchars($error) . '</p>'; ?>
     <form method="POST">
         <label>Codice OTP Brevo:</label><br>
         <input type="text" name="otp_code_brevo" maxlength="6" required><br>
