@@ -1,62 +1,47 @@
 <?php
-require_once __DIR__ . '/auth/auth_handler.php';// handleLogin(), handleLogout()
-require_once __DIR__ . '/controller/pizza_controller.php';   // addPizza, updatePizza, deletePizza, loadPizze
+require_once __DIR__ . '/auth/auth_handler.php';
+require_once __DIR__ . '/controller/pizza_controller.php';
 
-
-// Variabile per gestire errori generici
-$error = '';
 
 // 1) LOGOUT
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['logout'])) {
     handleLogout();
-    // Torniamo alla pagina pubblica
     header('Location: /pizzeria_vanilla/');
     exit;
 }
 
-// 2) LOGIN di base con username/password
+// 2) LOGIN
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
     $username = $_POST['username'] ?? '';
     $password = $_POST['password'] ?? '';
 
     if (handleLogin($username, $password)) {
-    header('Location: /pizzeria_vanilla/?verify=1');
-    exit;
-}
-}
-
-// 3) Verifica del codice OTP
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verify_otp'])) {
-    $userCode = $_POST['otp_code'] ?? '';
-    // Confrontiamo con sessione
-    if (isset($_SESSION['2fa_code']) && $userCode == $_SESSION['2fa_code']) {
-        // OTP corretto => login completato
-        $_SESSION['logged_in'] = true;
-        unset($_SESSION['2fa_code'], $_SESSION['2fa_pending']);
-        header('Location: /pizzeria_vanilla/?admin=true');
+        header('Location: /pizzeria_vanilla/?verify=1');
         exit;
-    } else {
-        $error = "Codice OTP errato o scaduto!";
     }
 }
 
-// 4) Se ?verify=1 e 2fa_pending, chiediamo il codice all'utente
+// 3) Verifica OTP
 if (isset($_GET['verify']) && ($_SESSION['2fa_pending'] ?? false)) {
     ?>
     <h1>Verifica Codice OTP</h1>
-    <?php if ($error) echo '<p style="color:red;">'.htmlspecialchars($error).'</p>'; ?>
+    <?php if ($error) echo '<p style="color:red;">' . htmlspecialchars($error) . '</p>'; ?>
     <form method="POST">
-        <label>Inserisci il codice ricevuto via email:</label><br>
-        <input type="text" name="otp_code" maxlength="6" required>
+        <label>Codice OTP Brevo:</label><br>
+        <input type="text" name="otp_code_brevo" maxlength="6" required><br>
+
+        <label>Codice OTP Gmail:</label><br>
+        <input type="text" name="otp_code_gmail" maxlength="6" required><br>
+
         <button type="submit" name="verify_otp">Verifica</button>
     </form>
     <?php
     exit;
 }
 
-// 5) Pagina pubblica se non c'è ?admin
+// 4) Pagina pubblica
 if (!isset($_GET['admin'])) {
-    $pizze = loadAllPizze(); // definita in pizza_controller
+    $pizze = loadAllPizze();
     echo '<h1>Pizza Menu</h1><ul>';
     foreach ($pizze as $pizza) {
         echo '<li>';
@@ -74,13 +59,11 @@ if (!isset($_GET['admin'])) {
     exit;
 }
 
-// 6) Se ?admin=true ma l'utente non è loggato, mostra form di login
-if (!($_SESSION['logged_in'] ?? false)) {
-    echo '<h1>Admin Login</h1>';
-    if ($error) {
-        echo '<p style="color:red;">'.htmlspecialchars($error).'</p>';
-    }
+// 5) Form di login
+if (!isAuthenticated()) {
     ?>
+    <h1>Admin Login</h1>
+    <?php if ($error) echo '<p style="color:red;">' . htmlspecialchars($error) . '</p>'; ?>
     <form method="POST">
         <label>Username</label><br>
         <input type="text" name="username" required><br><br>
@@ -92,25 +75,12 @@ if (!($_SESSION['logged_in'] ?? false)) {
     exit;
 }
 
-// 7) A questo punto l'utente è loggato e c'è ?admin=true: gestiamo CRUD
+// 6) CRUD gestione pizze
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] === 'add') {
-        addPizza(
-            $_POST['nome'],
-            $_POST['ingredienti'],
-            $_POST['prezzo_normale'],
-            $_POST['prezzo_maxi'],
-            $_FILES['immagine'] ?? null
-        );
+        addPizza($_POST['nome'], $_POST['ingredienti'], $_POST['prezzo_normale'], $_POST['prezzo_maxi'], $_FILES['immagine'] ?? null);
     } elseif ($_POST['action'] === 'update') {
-        updatePizza(
-            $_POST['id'],
-            $_POST['nome'],
-            $_POST['ingredienti'],
-            $_POST['prezzo_normale'],
-            $_POST['prezzo_maxi'],
-            $_FILES['immagine'] ?? null
-        );
+        updatePizza($_POST['id'], $_POST['nome'], $_POST['ingredienti'], $_POST['prezzo_normale'], $_POST['prezzo_maxi'], $_FILES['immagine'] ?? null);
     } elseif ($_POST['action'] === 'delete') {
         deletePizza($_POST['id']);
     }
@@ -118,55 +88,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
 // Carichiamo di nuovo le pizze
 $pizze = loadAllPizze();
-$pizzaToEdit = null;
-if (isset($_GET['edit_id'])) {
-    foreach ($pizze as $p) {
-        if ($p['id'] === $_GET['edit_id']) {
-            $pizzaToEdit = $p;
-            break;
-        }
-    }
-}
 ?>
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Admin Panel con 2FA Email (Brevo)</title>
+    <title>Admin Panel con 2FA Email</title>
 </head>
 <body>
 <h1>Admin Panel</h1>
 
-<?php if (!$pizzaToEdit): ?>
-    <h2>Add New Pizza</h2>
-    <form method="POST" enctype="multipart/form-data">
-        <input type="hidden" name="action" value="add">
-        <input type="text" name="nome" placeholder="Pizza Name" required><br>
-        <textarea name="ingredienti" placeholder="Ingredients" required></textarea><br>
-        <input type="number" step="0.01" name="prezzo_normale" placeholder="Normal Price" required><br>
-        <input type="number" step="0.01" name="prezzo_maxi" placeholder="Maxi Price" required><br>
-        <input type="file" name="immagine" accept="image/*" required><br>
-        <button type="submit">Add Pizza</button>
-    </form>
-<?php else: ?>
-    <h2>Edit Pizza</h2>
-    <form method="POST" enctype="multipart/form-data">
-        <input type="hidden" name="action" value="update">
-        <input type="hidden" name="id" value="<?= htmlspecialchars($pizzaToEdit['id']) ?>">
-        
-        <input type="text" name="nome" required
-               value="<?= htmlspecialchars($pizzaToEdit['nome']) ?>"><br>
-        <textarea name="ingredienti" required><?= htmlspecialchars($pizzaToEdit['ingredienti']) ?></textarea><br>
-        <input type="number" step="0.01" name="prezzo_normale" required
-               value="<?= htmlspecialchars($pizzaToEdit['prezzo_normale']) ?>"><br>
-        <input type="number" step="0.01" name="prezzo_maxi" required
-               value="<?= htmlspecialchars($pizzaToEdit['prezzo_maxi']) ?>"><br>
-        <!-- Facoltativo caricare nuova immagine -->
-        <input type="file" name="immagine" accept="image/*"><br>
-        <button type="submit">Update Pizza</button>
-        <a href="?admin=true">Cancel</a>
-    </form>
-<?php endif; ?>
+<h2>Add New Pizza</h2>
+<form method="POST" enctype="multipart/form-data">
+    <input type="hidden" name="action" value="add">
+    <input type="text" name="nome" placeholder="Pizza Name" required><br>
+    <textarea name="ingredienti" placeholder="Ingredients" required></textarea><br>
+    <input type="number" step="0.01" name="prezzo_normale" placeholder="Normal Price" required><br>
+    <input type="number" step="0.01" name="prezzo_maxi" placeholder="Maxi Price" required><br>
+    <input type="file" name="immagine" accept="image/*" required><br>
+    <button type="submit">Add Pizza</button>
+</form>
 
 <h2>Pizza List</h2>
 <ul>
@@ -189,7 +130,6 @@ if (isset($_GET['edit_id'])) {
     <?php endforeach; ?>
 </ul>
 
-<!-- Logout -->
 <form method="POST">
     <button type="submit" name="logout">Logout</button>
 </form>

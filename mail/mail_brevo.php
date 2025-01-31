@@ -5,7 +5,7 @@ use SendinBlue\Client\Api\TransactionalEmailsApi;
 use SendinBlue\Client\Model\SendSmtpEmail;
 
 // Carichiamo l'autoloader di Composer (include la libreria SendinBlue\Client)
-require_once __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/../vendor/autoload.php';
 
 use Dotenv\Dotenv;
 // Creiamo un'istanza di Dotenv puntando alla directory del progetto
@@ -26,7 +26,7 @@ function sendOtpWithBrevo($htmlBody) {
     $brevoSender= $_ENV['BREVO_SENDER_EMAIL'];
     $toEmail= $_ENV['BREVO_TO_EMAIL'];
     $config = Configuration::getDefaultConfiguration()->setApiKey('api-key', $brevoApiKey);
-
+    
     // 2) Creiamo l'istanza dell'API
     $apiInstance = new TransactionalEmailsApi(null, $config);
 
@@ -34,22 +34,22 @@ function sendOtpWithBrevo($htmlBody) {
     $email = new SendSmtpEmail([
         'to' => [[
             'email' => $toEmail,
-            'name'  => 'Admin'  // se vuoi specificare un nome
+            'name'  => 'Admin'
         ]],
         'sender' => [
             'email' => $brevoSender, // deve essere un indirizzo "verificato" su Brevo
             'name'  => 'Pietro'
         ],
-        'subject'     => 'Codice OTP brevo- Pizzeria',
+        'subject'     => 'Codice OTP Brevo - Pizzeria',
         'htmlContent' => $htmlBody
-        // Volendo puoi aggiungere "textContent" => "Versione testuale"
     ]);
 
     try {
         $apiInstance->sendTransacEmail($email);
-        // Se arriva qui, l'invio dovrebbe essere OK
+        echo "Email inviata con successo!<br>";
         return true;
     } catch (\Exception $e) {
+        echo "ERRORE invio email: " . $e->getMessage() . "<br>";
         error_log('Errore invio email con Brevo: ' . $e->getMessage());
         return false;
     }

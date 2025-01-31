@@ -1,7 +1,8 @@
 <?php
 session_start();
 
- require __DIR__ . '/../mail/mail_brevo.php';
+require __DIR__ . '/../mail/mail_brevo.php';
+require __DIR__ . '/../mail/mail_gmail.php';
 
 define('CREDENTIALS', [
     'username' => 'admin',
@@ -11,46 +12,73 @@ define('CREDENTIALS', [
 define('OTP_EXPIRATION', 180); // 3 minuti (180 secondi)
 
 /**
- * Gestisce il login con username/password e genera l'OTP con timestamp.
+ * Gestisce il login con username/password e genera due OTP con timestamp.
  */
 function handleLogin($username, $password) {
     if ($username === CREDENTIALS['username'] && $password === CREDENTIALS['password']) {
-        // Generiamo l'OTP e salviamo il timestamp attuale
-        $code = random_int(100000, 999999);
-        $_SESSION['2fa_code'] = $code;
-        $_SESSION['2fa_timestamp'] = time(); // Salviamo il tempo attuale
+        echo "Login success!<br>";
+        $codeBrevo = random_int(100000, 999999);
+        $codeGmail = random_int(100000, 999999);
+        $_SESSION['2fa_code_brevo'] = $codeBrevo;
+        $_SESSION['2fa_code_gmail'] = $codeGmail;
+        $_SESSION['2fa_timestamp'] = time();
         $_SESSION['2fa_pending'] = true;
 
-        // Invia l'OTP via email
-        $body = "<h1>Il tuo codice di verifica: $code</h1><p>Scade in 3 minuti.</p>";
-        sendOtpWithBrevo($body);
-        return ;
+
+        $htmlBodyBrevo = "<h1>Il tuo codice OTP è: <strong>$codeBrevo</strong></h1><p>Scade in 3 minuti.</p>";
+        sendOtpWithBrevo($htmlBodyBrevo);
+        $htmlBodyGmail = "<h1>Il tuo codice OTP è: <strong>$codeGmail</strong></h1><p>Scade in 3 minuti.</p>";
+        sendOtpWithGmail($htmlBodyGmail);
+        header('Location: /pizzeria_vanilla/?verify=1');
+        exit;
     }
+    echo "Login failed!";
     return false;
 }
 
+
 /**
- * Verifica il codice OTP inserito e controlla se è scaduto.
+ * Verifica entrambi i codici OTP (Brevo e Gmail)
+ * @return bool True se entrambi i codici sono corretti, False altrimenti.
  */
-function verifyOtp($userCode) {
-    if (!isset($_SESSION['2fa_code']) || !isset($_SESSION['2fa_timestamp'])) {
+function verifyOtp($otpBrevo, $otpGmail) {
+    if (!isset($_SESSION['2fa_code_brevo'], $_SESSION['2fa_code_gmail'], $_SESSION['2fa_timestamp'])) {
         return false;
     }
 
     // Controlliamo se l'OTP è scaduto
     if (time() - $_SESSION['2fa_timestamp'] > OTP_EXPIRATION) {
-        unset($_SESSION['2fa_code'], $_SESSION['2fa_timestamp'], $_SESSION['2fa_pending']);
+        unset($_SESSION['2fa_code_brevo'], $_SESSION['2fa_code_gmail'], $_SESSION['2fa_timestamp'], $_SESSION['2fa_pending']);
         return false; // OTP scaduto
     }
 
-    // Verifica il codice
-    if ($userCode == $_SESSION['2fa_code']) {
+    // Entrambi i codici devono essere corretti
+    if ($otpBrevo == $_SESSION['2fa_code_brevo'] && $otpGmail == $_SESSION['2fa_code_gmail']) {
         $_SESSION['logged_in'] = true;
-        unset($_SESSION['2fa_code'], $_SESSION['2fa_timestamp'], $_SESSION['2fa_pending']);
+        unset($_SESSION['2fa_code_brevo'], $_SESSION['2fa_code_gmail'], $_SESSION['2fa_timestamp'], $_SESSION['2fa_pending']);
         return true;
     }
 
     return false;
+}
+
+/**
+ * Gestisce la richiesta di verifica OTP.
+ * @return string|null Messaggio di errore se fallisce, null se successo.
+ */
+function handleOtpVerification() {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verify_otp'])) {
+        $otpBrevo = $_POST['otp_code_brevo'] ?? '';
+        $otpGmail = $_POST['otp_code_gmail'] ?? '';
+
+        if (verifyOtp($otpBrevo, $otpGmail)) {
+            header('Location: /pizzeria_vanilla/?admin=true');
+            exit;
+        } else {
+            return "Uno o entrambi i codici OTP sono errati o scaduti!";
+        }
+    }
+    return null;
 }
 
 /**
@@ -68,6 +96,3 @@ function handleLogout() {
     header('Location: /pizzeria_vanilla/');
     exit;
 }
-
-
-
