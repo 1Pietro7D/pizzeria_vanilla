@@ -63,7 +63,6 @@ if (!isset($_GET['admin'])) {
 if (!isAuthenticated()) {
     ?>
     <h1>Admin Login</h1>
-    <?php if ($error) echo '<p style="color:red;">' . htmlspecialchars($error) . '</p>'; ?>
     <form method="POST">
         <label>Username</label><br>
         <input type="text" name="username" required><br><br>
